@@ -5,6 +5,7 @@ import com.subreathingcode.URLShortener.exception.ShortUrlNotFoundException;
 import com.subreathingcode.URLShortener.repository.ShortUrlRepository;
 import com.subreathingcode.URLShortener.util.Base62Encoder;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ public class ShortUrlService {
         return shortUrlRepository.save(saved);
     }
 
+    @Cacheable(value = "shortUrls", key = "#shortCode")
     @Transactional(readOnly = true)
     public ShortUrl getByShortCode(String shortCode) {
         return shortUrlRepository.findByShortCode(shortCode)

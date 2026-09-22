@@ -83,12 +83,17 @@ No request body. The entire input is the path variable `shortCode = "cb"`. There
 **Step A — Controller delegates immediately**
 `shortUrlService.getByShortCode("cb")`.
 
-**Step B — Service does the lookup (`ShortUrlService.getByShortCode`)**
+**Step B — Cache check (`@Cacheable` on `getByShortCode`)**
+Before the method body ever runs, Spring's caching aspect checks Redis for a key like `shortUrls::cb`.
+- **Cache hit:** the cached `ShortUrl` is returned immediately — the method body, the transaction, and the database are never touched.
+- **Cache miss:** proceed to Step C, and once a result comes back, cache it in Redis before returning.
+
+**Step C — Service does the lookup (`ShortUrlService.getByShortCode`)**
 Runs inside a read-only transaction (`@Transactional(readOnly = true)`). Calls the repository's derived query method `findByShortCode("cb")`, which Spring Data JPA auto-generates from the method name (`SELECT * FROM short_urls WHERE short_code = ?`) — no manual SQL written.
 
-**Step C — Branch on the result**
-- **Found:** the entity is returned up to the controller.
-- **Not found:** `.orElseThrow(...)` throws `ShortUrlNotFoundException("cb")`, which propagates past the controller to the global exception handler.
+**Step D — Branch on the result**
+- **Found:** the entity is returned up to the controller (and cached in Redis for next time, per Step B).
+- **Not found:** `.orElseThrow(...)` throws `ShortUrlNotFoundException("cb")`, which propagates past the controller to the global exception handler. `@Cacheable` does not cache thrown exceptions, so a not-found result is never written to Redis — every lookup of a nonexistent code re-checks the database.
 
 ### 4. Output
 
@@ -123,9 +128,9 @@ Content-Type: application/json
 ## Both flows together
 
 ```
-POST /api/urls  →  201 + {shortCode, originalUrl}   (create the mapping)
-GET  /{code}    →  302 + Location header             (use the mapping, success)
-                →  404 + JSON error                   (mapping doesn't exist)
+POST /api/urls  →  201 + {shortCode, originalUrl}   (create the mapping, DB only)
+GET  /{code}    →  302 + Location header             (use the mapping, success — Redis or DB)
+                →  404 + JSON error                   (mapping doesn't exist — always DB, never cached)
 ```
 
-One flow writes the lookup table; the other reads it. In a real deployment, reads (redirects) will vastly outnumber writes (creates) — a detail that motivates optimizations like caching the read path (see `INTERVIEW_QA.md`, section 4).
+One flow writes the lookup table; the other reads it, now through a Redis cache. The cache is populated lazily — only a read ever writes to Redis, never the create flow — so the very first request for a given short code is always a cache miss (DB hit), and every subsequent request within the TTL is served from Redis without touching Postgres at all. This was verified directly: after caching a code, the underlying database row was deleted directly from Postgres, and the redirect still succeeded — proof the response came from Redis, not the database (see `INTERVIEW_QA.md`, section 6, for the full verification steps and caveats).
