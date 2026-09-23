@@ -88,6 +88,11 @@ Before the method body ever runs, Spring's caching aspect checks Redis for a key
 - **Cache hit:** the cached `ShortUrl` is returned immediately — the method body, the transaction, and the database are never touched.
 - **Cache miss:** proceed to Step C, and once a result comes back, cache it in Redis before returning.
 
+> **Note — cache characteristics**
+> 1. **TTL:** each cached entry lives for 1 hour (`spring.cache.redis.time-to-live=3600000`, in `application.properties`), then expires automatically — there is no manual eviction on write.
+> 2. **Eviction policy:** none is configured (`docker-compose.yml` sets no `maxmemory`/`maxmemory-policy` for the Redis service), so Redis runs with its default `noeviction` policy — keys are removed only by TTL expiry, never proactively for memory pressure.
+> 3. **Caching pattern:** cache-aside (lazy-loading), implemented declaratively via Spring's `@Cacheable` — the app checks Redis first, and only on a miss does it read the database and populate the cache; nothing is written to Redis on the create path.
+
 **Step C — Service does the lookup (`ShortUrlService.getByShortCode`)**
 Runs inside a read-only transaction (`@Transactional(readOnly = true)`). Calls the repository's derived query method `findByShortCode("cb")`, which Spring Data JPA auto-generates from the method name (`SELECT * FROM short_urls WHERE short_code = ?`) — no manual SQL written.
 
