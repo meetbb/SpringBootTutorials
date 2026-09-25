@@ -1,5 +1,7 @@
 package com.sunbreathingcode.authservice.controller;
 
+import com.sunbreathingcode.authservice.dto.LoginRequest;
+import com.sunbreathingcode.authservice.dto.LoginResponse;
 import com.sunbreathingcode.authservice.dto.RegisterRequest;
 import com.sunbreathingcode.authservice.dto.RegisterResponse;
 import com.sunbreathingcode.authservice.service.UserService;
@@ -25,5 +27,11 @@ public class AuthController {
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         RegisterResponse response = userService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse response = userService.login(request);
+        return ResponseEntity.ok(response);
     }
 }
