@@ -23,6 +23,8 @@ public class JwtService {
         this.accessTokenExpirationMs = accessTokenExpirationMs;
     }
 
+    // Signs a new access token for a user: subject = email, plus a userId claim,
+    // issued-at, and an expiry computed from the configured TTL.
     public String generateAccessToken(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + accessTokenExpirationMs);
@@ -36,10 +38,14 @@ public class JwtService {
                 .compact();
     }
 
+    // Pulls the subject (email) back out of a token's claims. Callers are expected
+    // to have already confirmed the token is valid before trusting this value.
     public String extractEmail(String token) {
         return extractAllClaims(token).getSubject();
     }
 
+    // Safe yes/no check for whether a token's signature and expiry are both good.
+    // Never throws — any parsing failure is treated as "not valid".
     public boolean isTokenValid(String token) {
         try {
             extractAllClaims(token);
@@ -49,6 +55,8 @@ public class JwtService {
         }
     }
 
+    // Shared parsing step: verifies the signature against our secret key and
+    // decodes the payload. Throws JwtException on any tampering or expiry issue.
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(signingKey)
