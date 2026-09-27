@@ -3,6 +3,8 @@ package com.sunbreathingcode.authservice.controller;
 import com.sunbreathingcode.authservice.dto.LoginRequest;
 import com.sunbreathingcode.authservice.dto.LoginResponse;
 import com.sunbreathingcode.authservice.dto.MeResponse;
+import com.sunbreathingcode.authservice.dto.RefreshRequest;
+import com.sunbreathingcode.authservice.dto.RefreshResponse;
 import com.sunbreathingcode.authservice.dto.RegisterRequest;
 import com.sunbreathingcode.authservice.dto.RegisterResponse;
 import com.sunbreathingcode.authservice.service.UserService;
@@ -39,6 +41,14 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    // Exchanges a still-valid refresh token for a new access token, without
+    // requiring the user to log in again.
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        RefreshResponse response = userService.refresh(request);
         return ResponseEntity.ok(response);
     }
 
