@@ -52,6 +52,14 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    // Revokes a refresh token by deleting its DB row — no access token required,
+    // since you should be able to log out even after the access token expired.
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        userService.logout(request);
+        return ResponseEntity.noContent().build();
+    }
+
     // Protected endpoint that proves the whole auth chain works. The Authentication
     // object here was populated by JwtAuthFilter, not looked up manually.
     @GetMapping("/me")

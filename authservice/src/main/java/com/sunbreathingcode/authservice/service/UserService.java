@@ -23,6 +23,7 @@ import java.time.ZoneId;
 import java.util.Base64;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserService {
@@ -78,9 +79,9 @@ public class UserService {
 
     // Exchanges a still-valid refresh token for a new access token. The JWT's own
     // signature/expiry is checked first, then its hash must still exist in
-    // Postgres — that DB lookup is what will let Checkpoint 9 revoke a refresh
-    // token early, since deleting the row invalidates it even though the JWT
-    // itself would otherwise still parse as valid.
+    // Postgres — that DB lookup is what makes logout() below able to revoke a
+    // refresh token early, since deleting the row invalidates it even though the
+    // JWT itself would otherwise still parse as valid.
     public RefreshResponse refresh(RefreshRequest request) {
         String refreshToken = request.getRefreshToken();
 
@@ -97,6 +98,24 @@ public class UserService {
 
         String accessToken = jwtService.generateAccessToken(user);
         return new RefreshResponse(accessToken);
+    }
+
+    // Revokes a refresh token by deleting its DB row. Validated the same way as
+    // refresh() so an arbitrary string can't be used to probe for hashes, but an
+    // unknown/already-deleted token is treated as a no-op — logout is idempotent,
+    // not an error, if you're already logged out.
+    // A derived delete query needs an active transaction to run (JPA's `remove`
+    // requires one) — without @Transactional here, Spring never opens one and the
+    // delete fails at the persistence layer.
+    @Transactional
+    public void logout(RefreshRequest request) {
+        String refreshToken = request.getRefreshToken();
+
+        if (!jwtService.isTokenValid(refreshToken) || !jwtService.isRefreshToken(refreshToken)) {
+            throw new InvalidRefreshTokenException();
+        }
+
+        refreshTokenRepository.deleteByTokenHash(hashToken(refreshToken));
     }
 
     private void saveRefreshToken(User user, String refreshToken) {

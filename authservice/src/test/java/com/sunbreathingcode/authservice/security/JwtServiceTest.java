@@ -45,11 +45,17 @@ class JwtServiceTest {
 
     // If a single character of the token is altered after signing, the signature check
     // must fail — this is what makes a JWT tamper-evident rather than just readable.
+    // The flip targets a middle character rather than the last one: base64url's final
+    // character in a group can carry unused padding bits, so tampering it sometimes
+    // decodes back to the same bytes and the test would flake.
     @Test
     void isTokenValid_returnsFalse_forTamperedToken() {
         String token = jwtService.generateAccessToken(user);
-        String tamperedToken = token.substring(0, token.length() - 1)
-                + (token.charAt(token.length() - 1) == 'a' ? 'b' : 'a');
+        int tamperIndex = token.length() / 2;
+        char tamperedChar = token.charAt(tamperIndex) == 'a' ? 'b' : 'a';
+        String tamperedToken = token.substring(0, tamperIndex)
+                + tamperedChar
+                + token.substring(tamperIndex + 1);
 
         assertThat(jwtService.isTokenValid(tamperedToken)).isFalse();
     }
