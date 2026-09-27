@@ -2,14 +2,18 @@ package com.sunbreathingcode.authservice.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sunbreathingcode.authservice.dto.LoginRequest;
 import com.sunbreathingcode.authservice.dto.LoginResponse;
 import com.sunbreathingcode.authservice.entity.User;
 import com.sunbreathingcode.authservice.exception.InvalidCredentialsException;
+import com.sunbreathingcode.authservice.repository.RefreshTokenRepository;
 import com.sunbreathingcode.authservice.repository.UserRepository;
 import com.sunbreathingcode.authservice.security.JwtService;
+import java.util.Date;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +29,9 @@ class UserServiceLoginTest {
     private UserRepository userRepository;
 
     @Mock
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -34,13 +41,13 @@ class UserServiceLoginTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, passwordEncoder, jwtService);
+        userService = new UserService(userRepository, refreshTokenRepository, passwordEncoder, jwtService);
     }
 
-    // With a matching email and correct password, login() should return the access
-    // token JwtService produced for that user — the whole point of the endpoint.
+    // With a matching email and correct password, login() should return both the
+    // access token and the refresh token JwtService produced for that user.
     @Test
-    void login_returnsAccessToken_whenCredentialsAreValid() {
+    void login_returnsAccessAndRefreshTokens_whenCredentialsAreValid() {
         User user = new User();
         user.setId(1L);
         user.setEmail("meet@sunbreathingcode.com");
@@ -53,10 +60,39 @@ class UserServiceLoginTest {
         when(userRepository.findByEmail("meet@sunbreathingcode.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("plain-password", "hashed-password")).thenReturn(true);
         when(jwtService.generateAccessToken(user)).thenReturn("signed-jwt-token");
+        when(jwtService.generateRefreshToken(user)).thenReturn("signed-refresh-token");
+        when(jwtService.extractExpiration("signed-refresh-token")).thenReturn(new Date());
 
         LoginResponse response = userService.login(request);
 
         assertThat(response.getAccessToken()).isEqualTo("signed-jwt-token");
+        assertThat(response.getRefreshToken()).isEqualTo("signed-refresh-token");
+    }
+
+    // Issuing a refresh token is meaningless unless its hash actually lands in
+    // Postgres — that row is the only way /auth/refresh can later find it again.
+    @Test
+    void login_persistsHashedRefreshToken_whenCredentialsAreValid() {
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("meet@sunbreathingcode.com");
+        user.setPasswordHash("hashed-password");
+
+        LoginRequest request = new LoginRequest();
+        request.setEmail("meet@sunbreathingcode.com");
+        request.setPassword("plain-password");
+
+        when(userRepository.findByEmail("meet@sunbreathingcode.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("plain-password", "hashed-password")).thenReturn(true);
+        when(jwtService.generateAccessToken(user)).thenReturn("signed-jwt-token");
+        when(jwtService.generateRefreshToken(user)).thenReturn("signed-refresh-token");
+        when(jwtService.extractExpiration("signed-refresh-token")).thenReturn(new Date());
+
+        userService.login(request);
+
+        verify(refreshTokenRepository)
+                .save(argThat(saved ->
+                        saved.getUserId().equals(1L) && !saved.getTokenHash().equals("signed-refresh-token")));
     }
 
     // If no user exists for the given email, login() must fail with the same
