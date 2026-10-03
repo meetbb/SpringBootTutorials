@@ -3,8 +3,6 @@ package com.sunbreathingcode.PaginationDemo.controller;
 import com.sunbreathingcode.PaginationDemo.dto.ItemResponse;
 import com.sunbreathingcode.PaginationDemo.dto.PagedResponse;
 import com.sunbreathingcode.PaginationDemo.service.ItemService;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,14 +19,14 @@ public class ItemController {
         this.itemService = itemService;
     }
 
-    // Builds the Pageable explicitly from page/size rather than letting Spring
-    // auto-bind a Pageable argument (which would also accept a raw, unvalidated
-    // "sort" param) — sorting is deliberately not wired in until it has a
-    // whitelist to validate against.
+    // Passes the raw page/size/sort params straight to the service — the
+    // whitelist check and Pageable construction are business rules, not
+    // controller concerns.
     @GetMapping
     public ResponseEntity<PagedResponse<ItemResponse>> getItems(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(itemService.getItems(pageable));
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort) {
+        return ResponseEntity.ok(itemService.getItems(page, size, sort));
     }
 }
