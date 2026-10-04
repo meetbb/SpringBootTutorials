@@ -2,6 +2,7 @@ package com.sunbreathingcode.PaginationDemo.service;
 
 import com.sunbreathingcode.PaginationDemo.dto.ItemResponse;
 import com.sunbreathingcode.PaginationDemo.dto.PagedResponse;
+import com.sunbreathingcode.PaginationDemo.dto.SeekResponse;
 import com.sunbreathingcode.PaginationDemo.entity.Item;
 import com.sunbreathingcode.PaginationDemo.exception.InvalidSortFieldException;
 import com.sunbreathingcode.PaginationDemo.repository.ItemRepository;
@@ -45,6 +46,25 @@ public class ItemService {
                 result.getTotalElements(),
                 result.getTotalPages(),
                 result.hasNext());
+    }
+
+    // Fetches size+1 rows so we can tell whether there's a next page without
+    // a separate COUNT query — if we got one extra row, trim it and report
+    // hasNext=true. "after=0" naturally means "from the beginning" since
+    // real item ids start at 1.
+    public SeekResponse<ItemResponse> seekItems(long after, int size) {
+        List<Item> rows = itemRepository.findByIdGreaterThanOrderByIdAsc(after, PageRequest.of(0, size + 1));
+
+        boolean hasNext = rows.size() > size;
+        List<Item> page = hasNext ? rows.subList(0, size) : rows;
+
+        List<ItemResponse> content = page.stream()
+                .map(item -> new ItemResponse(item.getId(), item.getName(), item.getCreatedAt()))
+                .toList();
+
+        Long nextAfter = page.isEmpty() ? after : page.get(page.size() - 1).getId();
+
+        return new SeekResponse<>(content, size, hasNext, nextAfter);
     }
 
     // Expects "field,direction" (e.g. "createdAt,desc"); direction defaults to
