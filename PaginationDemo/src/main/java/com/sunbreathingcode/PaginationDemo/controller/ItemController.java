@@ -2,11 +2,13 @@ package com.sunbreathingcode.PaginationDemo.controller;
 
 import com.sunbreathingcode.PaginationDemo.dto.ItemResponse;
 import com.sunbreathingcode.PaginationDemo.dto.PagedResponse;
+import com.sunbreathingcode.PaginationDemo.dto.PageRequestDto;
 import com.sunbreathingcode.PaginationDemo.service.ItemService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -19,14 +21,12 @@ public class ItemController {
         this.itemService = itemService;
     }
 
-    // Passes the raw page/size/sort params straight to the service — the
-    // whitelist check and Pageable construction are business rules, not
-    // controller concerns.
+    // @Valid rejects an out-of-range page/size before this method body runs,
+    // so an invalid request never reaches ItemService. The sort whitelist
+    // check still happens in the service — it depends on a dynamic set of
+    // allowed fields, not a fixed range Bean Validation can express.
     @GetMapping
-    public ResponseEntity<PagedResponse<ItemResponse>> getItems(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String sort) {
-        return ResponseEntity.ok(itemService.getItems(page, size, sort));
+    public ResponseEntity<PagedResponse<ItemResponse>> getItems(@Valid @ModelAttribute PageRequestDto request) {
+        return ResponseEntity.ok(itemService.getItems(request.getPage(), request.getSize(), request.getSort()));
     }
 }

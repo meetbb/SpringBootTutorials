@@ -27,6 +27,9 @@ public class ItemService {
         this.itemRepository = itemRepository;
     }
 
+    // page/size are already validated by PageRequestDto's @Min/@Max before
+    // this method is ever called — the controller rejects an invalid request
+    // on its own, so there's nothing to re-check here.
     public PagedResponse<ItemResponse> getItems(int page, int size, String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         Page<Item> result = itemRepository.findAll(pageable);
@@ -45,11 +48,12 @@ public class ItemService {
     }
 
     // Expects "field,direction" (e.g. "createdAt,desc"); direction defaults to
-    // ascending if omitted. No sort param at all means unsorted for now —
-    // Checkpoint 4 is what introduces a default sort when none is given.
+    // ascending if omitted. No sort param at all defaults to id,asc, so "no
+    // sort specified" never means "undefined order" (an unordered page isn't
+    // a stable page).
     private Sort parseSort(String sort) {
         if (sort == null || sort.isBlank()) {
-            return Sort.unsorted();
+            return Sort.by(Sort.Direction.ASC, "id");
         }
 
         String[] parts = sort.split(",", 2);
